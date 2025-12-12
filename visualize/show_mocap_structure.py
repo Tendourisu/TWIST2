@@ -54,7 +54,7 @@ def show_mocap_structure(file_path):
                         elif isinstance(sub_value, float):
                             print(f"    {sub_key}: {sub_value:.4f} (float)")
                 else:
-                    print(f"  Type: {type(value)}")
+                    print(f"  Type: {type(value)}: {value}")
 
     except Exception as e:  # noqa: BLE001
         print(f"Error reading {file_path}: {e}")
