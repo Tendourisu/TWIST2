@@ -477,12 +477,33 @@ class LeggedRobot(BaseTask):
         Args:
             env_ids (List[int]): Environments ids for which new commands are needed
         """
+        if len(env_ids) == 0:
+            return
+
         self.commands[env_ids, 0] = torch_rand_float(self.command_ranges["lin_vel_x"][0], self.command_ranges["lin_vel_x"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         self.commands[env_ids, 2] = torch_rand_float(self.command_ranges["ang_vel_yaw"][0], self.command_ranges["ang_vel_yaw"][1], (len(env_ids), 1), device=self.device).squeeze(1)
         self.commands[env_ids, 2] *= torch.abs(self.commands[env_ids, 2]) > self.cfg.commands.ang_vel_clip
 
         # set small commands to zero
         self.commands[env_ids, :2] *= torch.abs(self.commands[env_ids, 0:1]) > self.cfg.commands.lin_vel_clip
+
+        playback_idx = getattr(self.cfg.commands, "playback_command_idx", None)
+        if playback_idx is not None:
+            # Prefer explicit range; fallback to fixed value if provided.
+            playback_range = self.command_ranges.get("playback_rate", None)
+            if hasattr(self.cfg.commands, "motion"):
+                playback_cfg = self.cfg.commands.motion
+                playback_range = getattr(playback_cfg, "playback_rate_range", playback_range)
+                playback_value = getattr(playback_cfg, "playback_rate", 1.0)
+            else:
+                playback_value = 1.0
+
+            if playback_range is not None:
+                self.commands[env_ids, playback_idx] = torch_rand_float(
+                    playback_range[0], playback_range[1], (len(env_ids), 1), device=self.device
+                ).squeeze(1)
+            else:
+                self.commands[env_ids, playback_idx] = playback_value
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.
@@ -671,6 +692,13 @@ class LeggedRobot(BaseTask):
         self.contact_buf = torch.zeros(self.num_envs, self.cfg.env.contact_buf_len, 2, device=self.device, dtype=torch.float)
 
         self.commands = torch.zeros(self.num_envs, self.cfg.commands.num_commands, dtype=torch.float, device=self.device, requires_grad=False) # x vel, y vel, yaw vel, heading
+        playback_idx = getattr(self.cfg.commands, "playback_command_idx", None)
+        if playback_idx is not None and playback_idx < self.commands.shape[1]:
+            if hasattr(self.cfg.commands, "motion"):
+                playback_default = getattr(self.cfg.commands.motion, "playback_rate", 1.0)
+            else:
+                playback_default = 1.0
+            self.commands[:, playback_idx] = playback_default
         self.feet_air_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
         self.feet_land_time = torch.zeros(self.num_envs, self.feet_indices.shape[0], dtype=torch.float, device=self.device, requires_grad=False)
         self.last_contacts = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)

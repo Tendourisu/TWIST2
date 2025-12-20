@@ -74,6 +74,16 @@ class HumanoidMimic(HumanoidChar):
         self.deviate_vel_tracking_frames = torch.zeros((self.num_envs), device=self.device, dtype=torch.float)
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
     
+    def _get_playback_rate(self, env_ids=None):
+        playback_idx = getattr(self.cfg.commands, "playback_command_idx", None)
+        if playback_idx is None or not hasattr(self, "commands") or playback_idx >= self.commands.shape[1]:
+            if env_ids is None:
+                return torch.ones(self.num_envs, device=self.device)
+            return torch.ones(len(env_ids), device=self.device)
+        if env_ids is None:
+            return self.commands[:, playback_idx]
+        return self.commands[env_ids, playback_idx]
+    
     def _get_max_motion_len(self):
         max_len = 0
         num_motions = self._motion_lib.num_motions()
@@ -149,6 +159,10 @@ class HumanoidMimic(HumanoidChar):
         self._motion_time_offsets[env_ids] = motion_times
         
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
+        playback_rate = self._get_playback_rate(env_ids).unsqueeze(-1)
+        root_vel = root_vel * playback_rate
+        root_ang_vel = root_ang_vel * playback_rate
+        dof_vel = dof_vel * playback_rate
         root_pos[:, 2] += self.cfg.motion.height_offset
         
         
@@ -163,15 +177,19 @@ class HumanoidMimic(HumanoidChar):
     
     def _get_motion_times(self, env_ids=None):
         if env_ids is None:
-            motion_times = self.episode_length_buf * self.dt + self._motion_time_offsets
+            motion_times = self.episode_length_buf * self.dt * self._get_playback_rate() + self._motion_time_offsets
         else:
-            motion_times = self.episode_length_buf[env_ids] * self.dt + self._motion_time_offsets[env_ids]
+            motion_times = self.episode_length_buf[env_ids] * self.dt * self._get_playback_rate(env_ids) + self._motion_time_offsets[env_ids]
         return motion_times
     
     def _update_ref_motion(self):
         motion_ids = self._motion_ids
         motion_times = self._get_motion_times()
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
+        playback_rate = self._get_playback_rate().unsqueeze(-1)
+        root_vel = root_vel * playback_rate
+        root_ang_vel = root_ang_vel * playback_rate
+        dof_vel = dof_vel * playback_rate
         root_pos[:, 2] += self.cfg.motion.height_offset
         root_pos[:, :2] += self.episode_init_origin[:, :2]
         

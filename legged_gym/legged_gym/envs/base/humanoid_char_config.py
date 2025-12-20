@@ -259,18 +259,24 @@ class HumanoidCharCfg(BaseConfig):
         
     class commands:
         curriculum = False
-        num_commands = 3
+        num_commands = 4
         resampling_time = 3. # time before command are changed[s]
+        playback_command_idx = 3
 
         ang_vel_clip = 0.1
         lin_vel_clip = 0.1
         
         stand_prob = 0.3
+
+        class motion:
+            playback_rate = 1.0
+            playback_rate_range = [0.75, 1.25]
         
         class ranges:
             lin_vel_x = [-0.3, 1.5] # min max [m/s]
             lin_vel_y = [-0.3, 0.3]
             ang_vel_yaw = [-0.6, 0.6]    # min max [rad/s]
+            playback_rate = [1.0, 1.0]
 
     class sim:
         dt =  0.005
