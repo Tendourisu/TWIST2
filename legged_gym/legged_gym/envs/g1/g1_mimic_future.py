@@ -112,6 +112,7 @@ class G1MimicFuture(G1MimicDistill):
         
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = \
             self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+        playback_rate = self._get_playback_rate().view(self.num_envs, 1, 1)
         
         # Apply motion domain randomization noise (unified for all frames)
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel = self._apply_motion_domain_randomization(
@@ -131,13 +132,13 @@ class G1MimicFuture(G1MimicDistill):
         
         # Reshape all observations (unified)
         root_pos = root_pos.reshape(self.num_envs, total_steps, root_pos.shape[-1])
-        root_vel = root_vel.reshape(self.num_envs, total_steps, root_vel.shape[-1])
+        root_vel = root_vel.reshape(self.num_envs, total_steps, root_vel.shape[-1]) * playback_rate
         root_rot = root_rot.reshape(self.num_envs, total_steps, root_rot.shape[-1])
-        root_ang_vel = root_ang_vel.reshape(self.num_envs, total_steps, root_ang_vel.shape[-1])
+        root_ang_vel = root_ang_vel.reshape(self.num_envs, total_steps, root_ang_vel.shape[-1]) * playback_rate
         dof_pos = dof_pos.reshape(self.num_envs, total_steps, dof_pos.shape[-1])
-        dof_vel = dof_vel.reshape(self.num_envs, total_steps, dof_vel.shape[-1])
-        root_vel_local = root_vel_local.reshape(self.num_envs, total_steps, root_vel_local.shape[-1])
-        root_ang_vel_local = root_ang_vel_local.reshape(self.num_envs, total_steps, root_ang_vel_local.shape[-1])
+        dof_vel = dof_vel.reshape(self.num_envs, total_steps, dof_vel.shape[-1]) * playback_rate
+        root_vel_local = root_vel_local.reshape(self.num_envs, total_steps, root_vel_local.shape[-1]) * playback_rate
+        root_ang_vel_local = root_ang_vel_local.reshape(self.num_envs, total_steps, root_ang_vel_local.shape[-1]) * playback_rate
         root_pos_delta_local = root_pos_delta_local.reshape(self.num_envs, total_steps, root_pos_delta_local.shape[-1])
         root_rot_delta_local = root_rot_delta_local.reshape(self.num_envs, total_steps, root_rot_delta_local.shape[-1])
         whole_key_body_pos = whole_key_body_pos.reshape(self.num_envs, total_steps, -1)

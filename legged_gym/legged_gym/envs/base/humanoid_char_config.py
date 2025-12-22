@@ -269,14 +269,18 @@ class HumanoidCharCfg(BaseConfig):
         stand_prob = 0.3
 
         class motion:
-            playback_rate = 1.0
-            playback_rate_range = [0.75, 1.25]
+            playback_rate_range = [0.5, 1.5]
+            playback_rate_start = 1.0
+            playback_rate_end = 1.25
+            playback_std_min = 0.0
+            playback_std_max = 1.0
+            playback_std_start_step = 24000
+            playback_std_end_step = 240000
         
         class ranges:
             lin_vel_x = [-0.3, 1.5] # min max [m/s]
             lin_vel_y = [-0.3, 0.3]
             ang_vel_yaw = [-0.6, 0.6]    # min max [rad/s]
-            playback_rate = [1.0, 1.0]
 
     class sim:
         dt =  0.005

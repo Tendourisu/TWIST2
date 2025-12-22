@@ -53,6 +53,10 @@ class G1Mimic(HumanoidMimic):
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+        playback_rate = self._get_playback_rate().repeat_interleave(num_steps).unsqueeze(-1)
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         
         roll, pitch, yaw = euler_from_quaternion(root_rot)
         roll = roll.reshape(self.num_envs, num_steps, 1)
@@ -94,6 +98,10 @@ class G1Mimic(HumanoidMimic):
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+        playback_rate = self._get_playback_rate().repeat_interleave(num_steps).unsqueeze(-1)
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         
         roll, pitch, yaw = euler_from_quaternion(root_rot)
         roll = roll.reshape(self.num_envs, num_steps, 1)

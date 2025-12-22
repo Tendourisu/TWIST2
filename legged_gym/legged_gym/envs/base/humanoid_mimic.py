@@ -160,9 +160,9 @@ class HumanoidMimic(HumanoidChar):
         
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
         playback_rate = self._get_playback_rate(env_ids).unsqueeze(-1)
-        root_vel = root_vel * playback_rate
-        root_ang_vel = root_ang_vel * playback_rate
-        dof_vel = dof_vel * playback_rate
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         root_pos[:, 2] += self.cfg.motion.height_offset
         
         
@@ -187,9 +187,9 @@ class HumanoidMimic(HumanoidChar):
         motion_times = self._get_motion_times()
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
         playback_rate = self._get_playback_rate().unsqueeze(-1)
-        root_vel = root_vel * playback_rate
-        root_ang_vel = root_ang_vel * playback_rate
-        dof_vel = dof_vel * playback_rate
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         root_pos[:, 2] += self.cfg.motion.height_offset
         root_pos[:, :2] += self.episode_init_origin[:, :2]
         
@@ -308,6 +308,10 @@ class HumanoidMimic(HumanoidChar):
         if len(hard_sync_env_ids) == 0:
             return
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(self._motion_ids, motion_times*0)
+        playback_rate = self._get_playback_rate(hard_sync_env_ids).unsqueeze(-1)
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         self._reset_dofs(hard_sync_env_ids, dof_pos, dof_vel*0.8)
         self._reset_root_states(env_ids=hard_sync_env_ids, root_vel=root_vel*0.8, root_quat=root_rot, root_pos=root_pos, root_ang_vel=root_ang_vel*0.8)
         self.gym.simulate(self.sim)
@@ -404,6 +408,8 @@ class HumanoidMimic(HumanoidChar):
         """
         self._update_ref_motion()
         # self._hard_sync_motion_loop()
+        env_ids = (self.episode_length_buf % int(self.cfg.commands.resampling_time / self.dt)==0)
+        self._resample_commands(env_ids.nonzero(as_tuple=False).flatten())
 
         if self.cfg.domain_rand.push_robots and  (self.common_step_counter % self.cfg.domain_rand.push_interval == 0):
             self._push_robots()
@@ -531,6 +537,10 @@ class HumanoidMimic(HumanoidChar):
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+        playback_rate = self._get_playback_rate().unsqueeze(-1)
+        root_vel *= playback_rate
+        root_ang_vel *= playback_rate
+        dof_vel *= playback_rate
         
         # Apply motion domain randomization noise
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel = self._apply_motion_domain_randomization(
