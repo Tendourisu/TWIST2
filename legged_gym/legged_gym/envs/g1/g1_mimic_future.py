@@ -105,13 +105,15 @@ class G1MimicFuture(G1MimicDistill):
         
         # Single motion sampling call for all time steps
         motion_times = self._get_motion_times().unsqueeze(-1)
-        obs_motion_times = all_steps * self.dt + motion_times
+        playback_dt = self._get_playback_dt().unsqueeze(-1)
+        obs_motion_times = all_steps * playback_dt + motion_times
         motion_ids_tiled = torch.broadcast_to(self._motion_ids.unsqueeze(-1), obs_motion_times.shape)
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
         
+        playback_rate_tiled = self._tile_playback_rate(env_ids=None, repeat_steps=total_steps)
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = \
-            self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+            self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times, playback_rate=playback_rate_tiled)
         
         # Apply motion domain randomization noise (unified for all frames)
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel = self._apply_motion_domain_randomization(

@@ -295,7 +295,7 @@ class HumanoidCharCfg(BaseConfig):
         motion_curriculum = False
         motion_curriculum_gamma = 0.001
         key_bodies = []
-        upper_key_bodies = []
+        ulegged_gym/legged_gym/envs/base/__pycache__pper_key_bodies = []
         motion_file = ""
         height_offset = 0.0
         reset_consec_frames = 50
@@ -303,6 +303,13 @@ class HumanoidCharCfg(BaseConfig):
         motion_decompose = False
         motion_smooth = True
         use_adaptive_pose_termination = False  # True: use adaptive termination distance, False: use fixed termination distance
+        playback_rate_mean_start = 1.0
+        playback_rate_mean_end = 1.0
+        playback_rate_std_start = 0.0
+        playback_rate_std_end = 0.5
+        playback_rate_start = 48000
+        playback_rate_end = 240000
+        playback_rate_rand = [0.5, 1.5]
         
         # Motion Domain Randomization parameters
         motion_dr_enabled = False  # Enable motion domain randomization

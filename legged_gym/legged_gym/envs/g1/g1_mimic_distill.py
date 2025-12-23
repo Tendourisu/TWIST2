@@ -37,8 +37,11 @@ class G1MimicDistill(HumanoidMimic):
         
         self._motion_ids[env_ids] = motion_ids
         self._motion_time_offsets[env_ids] = motion_times
+        self._sample_playback_rate(env_ids)
         
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(
+            motion_ids, motion_times, playback_rate=self.playback_rate[env_ids]
+        )
         root_pos[:, 2] += self.cfg.motion.height_offset
         self._ref_root_pos[env_ids] = root_pos
         self._ref_root_rot[env_ids] = root_rot
@@ -54,7 +57,9 @@ class G1MimicDistill(HumanoidMimic):
     def _update_ref_motion(self):
         motion_ids = self._motion_ids
         motion_times = self._get_motion_times()
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(
+            motion_ids, motion_times, playback_rate=self.playback_rate
+        )
         root_pos[:, 2] += self.cfg.motion.height_offset
         root_pos[:, :2] += self.episode_init_origin[:, :2]
         
@@ -123,11 +128,15 @@ class G1MimicDistill(HumanoidMimic):
         num_steps = self._tar_motion_steps_priv.shape[0]
         assert num_steps > 0, "Invalid number of target observation steps"
         motion_times = self._get_motion_times().unsqueeze(-1)
-        obs_motion_times = self._tar_motion_steps_priv * self.dt + motion_times
+        playback_dt = self._get_playback_dt().unsqueeze(-1)
+        obs_motion_times = self._tar_motion_steps_priv * playback_dt + motion_times
         motion_ids_tiled = torch.broadcast_to(self._motion_ids.unsqueeze(-1), obs_motion_times.shape)
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
+        playback_rate_tiled = self._tile_playback_rate(env_ids=None, repeat_steps=num_steps)
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(
+            motion_ids_tiled, obs_motion_times, playback_rate=playback_rate_tiled
+        )
         
         roll, pitch, yaw = euler_from_quaternion(root_rot)
         roll = roll.reshape(self.num_envs, num_steps, 1)

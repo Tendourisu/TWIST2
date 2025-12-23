@@ -294,6 +294,8 @@ class OnPolicyDaggerRunner:
             regularization_scale = self.env.cfg.rewards.regularization_scale if hasattr(self.env.cfg.rewards, "regularization_scale") else 1
             average_episode_length = torch.mean(self.env.episode_length.float()).item() if hasattr(self.env, "episode_length") else 0
             mean_motion_difficulty = self.env.mean_motion_difficulty if hasattr(self.env, "mean_motion_difficulty") else 0
+            playback_rate_mean = self.env.playback_rate.mean().item() if hasattr(self.env, "playback_rate") else 0.0
+            playback_rate_std = self.env.playback_rate.std().item() if hasattr(self.env, "playback_rate") else 0.0
             mean_value_loss, mean_surrogate_loss, mean_priv_reg_loss, priv_reg_coef, mean_grad_penalty_loss, grad_penalty_coef, kl_teacher_student_loss = self.alg.update()
     
             stop = time.time()
@@ -365,6 +367,8 @@ class OnPolicyDaggerRunner:
         
         if locs['mean_motion_difficulty'] != 0:
             wandb_dict['Scale/motion_difficulty'] = locs["mean_motion_difficulty"]
+        wandb_dict['Motion/playback_rate_mean'] = locs['playback_rate_mean']
+        wandb_dict['Motion/playback_rate_std'] = locs['playback_rate_std']
 
         wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps
