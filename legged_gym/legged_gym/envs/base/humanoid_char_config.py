@@ -295,7 +295,7 @@ class HumanoidCharCfg(BaseConfig):
         motion_curriculum = False
         motion_curriculum_gamma = 0.001
         key_bodies = []
-        ulegged_gym/legged_gym/envs/base/__pycache__pper_key_bodies = []
+        upper_key_bodies = []
         motion_file = ""
         height_offset = 0.0
         reset_consec_frames = 50
