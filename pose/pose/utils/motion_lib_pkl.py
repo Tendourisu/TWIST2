@@ -104,6 +104,11 @@ class MotionLib:
             local_body_pos = torch.tensor(motion_data["local_body_pos"], dtype=torch.float, device=self._device)
             if self._body_link_list is None or len(self._body_link_list) == 0:
                 self._body_link_list = motion_data["link_body_list"]
+                self._body_link_list = [
+                    "left_ctag_base_link" if link == "left_rubber_hand" else
+                    "right_ctag_base_link" if link == "right_rubber_hand" else link
+                    for link in self._body_link_list
+                ]
             num_frames = root_pos.shape[0]
             motion_len_s = 1.0 / fps * (num_frames - 1)
             

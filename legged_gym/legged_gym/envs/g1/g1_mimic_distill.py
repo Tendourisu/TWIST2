@@ -51,7 +51,8 @@ class G1MimicDistill(HumanoidMimic):
         self._ref_dof_vel[env_ids] = dof_vel
         self._ref_root_pos_delta_local[env_ids] = root_pos_delta_local
         self._ref_root_rot_delta_local[env_ids] = root_rot_delta_local
-        self._ref_body_pos[env_ids] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(env_ids, global_body_pos)
     
     
     def _update_ref_motion(self):
@@ -71,7 +72,8 @@ class G1MimicDistill(HumanoidMimic):
         self._ref_dof_vel[:] = dof_vel
         self._ref_root_pos_delta_local[:] = root_pos_delta_local
         self._ref_root_rot_delta_local[:] = root_rot_delta_local
-        self._ref_body_pos[:] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(torch.arange(self.num_envs, device=self.device), global_body_pos)
         
     def _update_motion_difficulty(self, env_ids):
         if self.obs_type == 'priv':

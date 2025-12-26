@@ -306,10 +306,10 @@ class HumanoidCharCfg(BaseConfig):
         playback_rate_mean_start = 1.0
         playback_rate_mean_end = 1.0
         playback_rate_std_start = 0.0
-        playback_rate_std_end = 0.5
-        playback_rate_start = 48000
-        playback_rate_end = 240000
-        playback_rate_rand = [0.5, 1.5]
+        playback_rate_std_end = 0.0
+        playback_rate_start = 0
+        playback_rate_end = 0
+        playback_rate_rand = [1.0, 1.0]
         
         # Motion Domain Randomization parameters
         motion_dr_enabled = False  # Enable motion domain randomization

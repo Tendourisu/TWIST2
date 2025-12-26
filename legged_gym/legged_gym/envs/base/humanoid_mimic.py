@@ -124,6 +124,19 @@ class HumanoidMimic(HumanoidChar):
             self._dof_err_w = torch.tensor(self._dof_err_w, device=self.device, dtype=torch.float)
         
         self._key_body_ids_motion = self._motion_lib.get_key_body_idx(key_body_names=self.cfg.motion.key_bodies)
+        # Map motion body names to sim body ids so extra URDF links can be ignored safely
+        motion_body_ids = []
+        missing_motion_bodies = []
+        for body_name in self._motion_lib._body_link_list:
+            body_id = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0], body_name)
+            motion_body_ids.append(body_id)
+            if body_id == -1:
+                missing_motion_bodies.append(body_name)
+        self._motion_body_ids = torch.tensor(motion_body_ids, device=self.device, dtype=torch.long)
+        self._motion_body_valid_mask = self._motion_body_ids >= 0
+        self._motion_body_sim_ids = self._motion_body_ids[self._motion_body_valid_mask]
+        if len(missing_motion_bodies) > 0:
+            cprint(f"[HumanoidMimic] Motion bodies not found in sim: {missing_motion_bodies}", "red")
         # compare two tensors are same
         # assert torch.equal(self._key_body_ids, torch.tensor(key_body_ids_motion, device=self.device, dtype=torch.long)), \
         #     f"Key body ids mismatch: {self._key_body_ids} vs {key_body_ids_motion}"
@@ -132,6 +145,15 @@ class HumanoidMimic(HumanoidChar):
         if env_ids is None:
             return self.playback_dt
         return self.playback_dt[env_ids]
+
+    def _scatter_ref_body_pos(self, env_ids, global_body_pos):
+        # Only write reference poses for motion bodies that exist in the sim
+        if self._motion_body_sim_ids.numel() == 0:
+            raise RuntimeError("No valid motion body ids found in simulation asset.")
+        ref_body_pos = torch.zeros((len(env_ids), self._ref_body_pos.shape[1], 3),
+                                   device=self.device, dtype=self._ref_body_pos.dtype)
+        ref_body_pos[:, self._motion_body_sim_ids, :] = global_body_pos[:, self._motion_body_valid_mask, :]
+        self._ref_body_pos[env_ids] = ref_body_pos
 
     def _tile_playback_rate(self, env_ids, repeat_steps):
         rate = self.playback_rate if env_ids is None else self.playback_rate[env_ids]
@@ -215,7 +237,8 @@ class HumanoidMimic(HumanoidChar):
         self._ref_root_ang_vel[env_ids] = root_ang_vel
         self._ref_dof_pos[env_ids] = dof_pos
         self._ref_dof_vel[env_ids] = dof_vel
-        self._ref_body_pos[env_ids] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(env_ids, global_body_pos)
         
     
     def _get_motion_times(self, env_ids=None):
@@ -240,7 +263,8 @@ class HumanoidMimic(HumanoidChar):
         self._ref_root_ang_vel[:] = root_ang_vel
         self._ref_dof_pos[:] = dof_pos
         self._ref_dof_vel[:] = dof_vel
-        self._ref_body_pos[:] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(torch.arange(self.num_envs, device=self.device), global_body_pos)
             
     def _reset_root_states(self, env_ids, root_vel=None, root_quat=None, root_pos=None, root_ang_vel=None):
         """ Resets ROOT states position and velocities of selected environmments
