@@ -488,46 +488,6 @@ class LeggedRobot(BaseTask):
         self.commands[env_ids, :2] *= torch.abs(self.commands[env_ids, 0:1]) > self.cfg.commands.lin_vel_clip
 
 
-        playback_range = self.command_ranges.get("playback_rate_start", None)
-        if hasattr(self.cfg.commands, "motion"):
-            playback_cfg = self.cfg.commands.motion
-            playback_range = getattr(playback_cfg, "playback_rate_range", playback_range)
-            playback_rate_start = getattr(playback_cfg, "playback_rate_start", 1.0)
-            playback_rate_end = getattr(playback_cfg, "playback_rate_end", 1.0)
-            std_min = getattr(playback_cfg, "playback_std_min", 0.0)
-            std_max = getattr(playback_cfg, "playback_std_max", 0.0)
-            std_start = getattr(playback_cfg, "playback_std_start_step", 0)
-            std_end = getattr(playback_cfg, "playback_std_end_step", std_start + 1)
-        else:
-            playback_rate = 1.0
-            playback_rate_start = 1.0
-            playback_rate_end = 1.0
-            std_min = 0.0
-            std_max = 0.0
-            std_start = 0
-            std_end = 1
-
-        # Linear std schedule
-        if std_end <= std_start:
-            std = std_max
-        else:
-            phase = (self.total_env_steps_counter - std_start) / float(std_end - std_start)
-            phase = float(min(max(phase, 0.0), 1.0))
-            mean = playback_rate_start + (playback_rate_end - playback_rate_start) * phase
-            playback_rate = mean
-            std = std_min + (std_max - std_min) * phase
-            std = max(std, 0.0)
-
-        mean_tensor = torch.full((len(env_ids), 1), playback_rate, device=self.device)
-        std_tensor = torch.full((len(env_ids), 1), std, device=self.device)
-        sampled = torch.normal(mean=mean_tensor, std=std_tensor)
-
-        if playback_range is not None:
-            sampled = torch.clamp(sampled, playback_range[0], playback_range[1])
-        else:
-            sampled = torch.clamp(sampled, min=0.0)
-
-        self.commands[env_ids, 3] = sampled.squeeze(1)
 
     def _compute_torques(self, actions):
         """ Compute torques from actions.

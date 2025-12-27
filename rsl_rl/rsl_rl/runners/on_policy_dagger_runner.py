@@ -370,17 +370,7 @@ class OnPolicyDaggerRunner:
         wandb_dict['Motion/playback_rate_mean'] = locs['playback_rate_mean']
         wandb_dict['Motion/playback_rate_std'] = locs['playback_rate_std']
 
-        # Log playback rate statistics from env commands if available.
-        # Populate locs for consistent logging style.
-        playback_idx = getattr(self.env.cfg.commands, "playback_command_idx", None)
-        if playback_idx is not None and hasattr(self.env, "commands") and playback_idx < self.env.commands.shape[1]:
-            playback_vals = self.env.commands[:, playback_idx]
-            locs['playback_rate_mean'] = playback_vals.mean().item()
-            locs['playback_rate_std'] = playback_vals.std(unbiased=False).item()
-            wandb_dict['Command/playback_rate_mean'] = locs['playback_rate_mean']
-            wandb_dict['Command/playback_rate_std'] = locs['playback_rate_std']
-        else:
-            raise Exception("No playback rate command found in environment for logging.")
+
 
         wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps

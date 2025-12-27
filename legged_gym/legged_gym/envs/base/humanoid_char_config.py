@@ -259,23 +259,14 @@ class HumanoidCharCfg(BaseConfig):
         
     class commands:
         curriculum = False
-        num_commands = 4
+        num_commands = 3
         resampling_time = 3. # time before command are changed[s]
-        playback_command_idx = 3
 
         ang_vel_clip = 0.1
         lin_vel_clip = 0.1
         
         stand_prob = 0.3
 
-        class motion:
-            playback_rate_range = [0.5, 1.5]
-            playback_rate_start = 1.0
-            playback_rate_end = 1.25
-            playback_std_min = 0.0
-            playback_std_max = 1.0
-            playback_std_start_step = 24000
-            playback_std_end_step = 240000
         
         class ranges:
             lin_vel_x = [-0.3, 1.5] # min max [m/s]
@@ -314,12 +305,12 @@ class HumanoidCharCfg(BaseConfig):
         motion_smooth = True
         use_adaptive_pose_termination = False  # True: use adaptive termination distance, False: use fixed termination distance
         playback_rate_mean_start = 1.0
-        playback_rate_mean_end = 1.0
+        playback_rate_mean_end = 1.5
         playback_rate_std_start = 0.0
-        playback_rate_std_end = 0.0
-        playback_rate_start = 0
-        playback_rate_end = 0
-        playback_rate_rand = [1.0, 1.0]
+        playback_rate_std_end = 0.5
+        playback_rate_start = 24000
+        playback_rate_end = 240000
+        playback_rate_rand = [0.5, 2.0]
         
         # Motion Domain Randomization parameters
         motion_dr_enabled = False  # Enable motion domain randomization
