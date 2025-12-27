@@ -41,7 +41,7 @@ class G1MimicStuFutureCfg(G1MimicPrivCfg):
         
         class force_curriculum:
             # Force application settings
-            force_apply_links = ['left_rubber_hand', 'right_rubber_hand']  # Links to apply forces to
+            force_apply_links = ['left_ctag_base_link', 'right_ctag_base_link']  # Links to apply forces to
             
             # Force curriculum learning
             force_scale_curriculum = True
