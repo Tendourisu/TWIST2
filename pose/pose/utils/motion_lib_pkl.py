@@ -104,6 +104,11 @@ class MotionLib:
             local_body_pos = torch.tensor(motion_data["local_body_pos"], dtype=torch.float, device=self._device)
             if self._body_link_list is None or len(self._body_link_list) == 0:
                 self._body_link_list = motion_data["link_body_list"]
+                self._body_link_list = [
+                    "left_ctag_base_link" if link == "left_rubber_hand" else
+                    "right_ctag_base_link" if link == "right_rubber_hand" else link
+                    for link in self._body_link_list
+                ]
             num_frames = root_pos.shape[0]
             motion_len_s = 1.0 / fps * (num_frames - 1)
             
@@ -344,7 +349,7 @@ class MotionLib:
         
         return frame_idx0, frame_idx1, blend
         
-    def calc_motion_frame(self, motion_ids, motion_times):
+    def calc_motion_frame(self, motion_ids, motion_times, playback_rate=None):
         motion_loop_num = torch.floor(motion_times / self._motion_lengths[motion_ids])
         motion_times -= motion_loop_num * self._motion_lengths[motion_ids]
         frame_idx0, frame_idx1, blend = self._calc_frame_blend(motion_ids, motion_times)
@@ -385,6 +390,18 @@ class MotionLib:
         root_rot_delta_local1 = self._motion_root_rot_delta_local[frame_idx1]
         # we use linear interpolation for root rot delta, as it is euler angle
         root_rot_delta_local = (1.0 - blend_unsqueeze) * root_rot_delta_local0 + blend_unsqueeze * root_rot_delta_local1
+
+        if playback_rate is None:
+            playback_rate = torch.ones(root_vel.shape[0], device=self._device, dtype=root_vel.dtype)
+        else:
+            playback_rate = torch.as_tensor(playback_rate, device=self._device, dtype=root_vel.dtype)
+            if playback_rate.ndim == 0:
+                playback_rate = playback_rate.expand(root_vel.shape[0])
+
+        rate_view = playback_rate.reshape(root_vel.shape[0], *([1] * (root_vel.ndim - 1)))
+        root_vel = root_vel * rate_view
+        root_ang_vel = root_ang_vel * rate_view
+        dof_vel = dof_vel * rate_view
 
         return root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, local_key_body_pos, root_pos_delta_local, root_rot_delta_local
     

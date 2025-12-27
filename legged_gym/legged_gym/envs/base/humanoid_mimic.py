@@ -11,6 +11,7 @@ from .humanoid_char import HumanoidChar, convert_to_global_root_body_pos, conver
 
 from pose.utils import torch_utils
 from pose.utils.motion_lib_pkl import MotionLib
+from legged_gym.gym_utils.distributions import sample_truncated_normal
 from legged_gym.gym_utils.helpers import class_to_dict
 
 import time
@@ -98,6 +99,7 @@ class HumanoidMimic(HumanoidChar):
         # if self.viewer is None:
         self.max_episode_length_s = self._get_max_motion_len().item()
         self.max_episode_length = np.ceil(self.max_episode_length_s / self.dt)
+        self.base_dt = self.dt
         super()._init_buffers()
         self._init_motion_buffers()
         
@@ -111,6 +113,9 @@ class HumanoidMimic(HumanoidChar):
     def _init_motion_buffers(self):
         self._motion_ids = torch.zeros(self.num_envs, device=self.device, dtype=torch.int64)
         self._motion_time_offsets = torch.zeros(self.num_envs, device=self.device, dtype=torch.float)
+        self.playback_rate = torch.ones(self.num_envs, device=self.device, dtype=torch.float)
+        self.playback_dt = torch.ones_like(self.playback_rate) * self.base_dt
+        self._playback_std_min = 1e-6
         
         self._ref_root_pos = torch.zeros_like(self.root_states[:, 0:3])
         self._ref_root_rot = torch.zeros_like(self.root_states[:, 3:7])
@@ -129,9 +134,80 @@ class HumanoidMimic(HumanoidChar):
             self._dof_err_w = torch.tensor(self._dof_err_w, device=self.device, dtype=torch.float)
         
         self._key_body_ids_motion = self._motion_lib.get_key_body_idx(key_body_names=self.cfg.motion.key_bodies)
+        # Map motion body names to sim body ids so extra URDF links can be ignored safely
+        motion_body_ids = []
+        missing_motion_bodies = []
+        for body_name in self._motion_lib._body_link_list:
+            body_id = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0], body_name)
+            motion_body_ids.append(body_id)
+            if body_id == -1:
+                missing_motion_bodies.append(body_name)
+        self._motion_body_ids = torch.tensor(motion_body_ids, device=self.device, dtype=torch.long)
+        self._motion_body_valid_mask = self._motion_body_ids >= 0
+        self._motion_body_sim_ids = self._motion_body_ids[self._motion_body_valid_mask]
+        if len(missing_motion_bodies) > 0:
+            cprint(f"[HumanoidMimic] Motion bodies not found in sim: {missing_motion_bodies}", "red")
         # compare two tensors are same
         # assert torch.equal(self._key_body_ids, torch.tensor(key_body_ids_motion, device=self.device, dtype=torch.long)), \
         #     f"Key body ids mismatch: {self._key_body_ids} vs {key_body_ids_motion}"
+
+    def _get_playback_dt(self, env_ids=None):
+        if env_ids is None:
+            return self.playback_dt
+        return self.playback_dt[env_ids]
+
+    def _scatter_ref_body_pos(self, env_ids, global_body_pos):
+        # Only write reference poses for motion bodies that exist in the sim
+        if self._motion_body_sim_ids.numel() == 0:
+            raise RuntimeError("No valid motion body ids found in simulation asset.")
+        ref_body_pos = torch.zeros((len(env_ids), self._ref_body_pos.shape[1], 3),
+                                   device=self.device, dtype=self._ref_body_pos.dtype)
+        ref_body_pos[:, self._motion_body_sim_ids, :] = global_body_pos[:, self._motion_body_valid_mask, :]
+        self._ref_body_pos[env_ids] = ref_body_pos
+
+    def _tile_playback_rate(self, env_ids, repeat_steps):
+        rate = self.playback_rate if env_ids is None else self.playback_rate[env_ids]
+        return rate.unsqueeze(-1).expand(-1, repeat_steps).reshape(-1)
+
+    def _scheduled_playback_value(self, start_val, end_val, start_step, end_step):
+        curr_step = float(self.total_env_steps_counter)
+        if end_step <= start_step:
+            return float(end_val)
+        alpha = (curr_step - start_step) / (end_step - start_step)
+        alpha = min(1.0, max(0.0, alpha))
+        return float(start_val + (end_val - start_val) * alpha)
+
+    def _sample_playback_rate(self, env_ids):
+        if len(env_ids) == 0:
+            return
+        motion_cfg = self.cfg.motion
+        start_step = getattr(motion_cfg, "playback_rate_start", 0)
+        end_step = getattr(motion_cfg, "playback_rate_end", 0)
+        mean = self._scheduled_playback_value(
+            getattr(motion_cfg, "playback_rate_mean_start", 1.0),
+            getattr(motion_cfg, "playback_rate_mean_end", 1.0),
+            start_step,
+            end_step,
+        )
+        std = self._scheduled_playback_value(
+            getattr(motion_cfg, "playback_rate_std_start", 0.0),
+            getattr(motion_cfg, "playback_rate_std_end", 0.0),
+            start_step,
+            end_step,
+        )
+        std = max(std, self._playback_std_min)
+        rate_clip = getattr(motion_cfg, "playback_rate_rand", [0.5, 2.0])
+        sampled_rate = sample_truncated_normal(
+            mu=mean,
+            sigma=std,
+            low=rate_clip[0],
+            high=rate_clip[1],
+            shape=(len(env_ids),),
+            device=self.device,
+        )
+        sampled_rate = torch.clamp(sampled_rate, min=rate_clip[0], max=rate_clip[1])
+        self.playback_rate[env_ids] = sampled_rate
+        self.playback_dt[env_ids] = sampled_rate * self.base_dt
     
     def _reset_ref_motion(self, env_ids, motion_ids=None):
         n = len(env_ids)
@@ -157,12 +233,11 @@ class HumanoidMimic(HumanoidChar):
         
         self._motion_ids[env_ids] = motion_ids
         self._motion_time_offsets[env_ids] = motion_times
+        self._sample_playback_rate(env_ids)
         
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
-        playback_rate = self._get_playback_rate(env_ids).unsqueeze(-1)
-        root_vel *= playback_rate
-        root_ang_vel *= playback_rate
-        dof_vel *= playback_rate
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(
+            motion_ids, motion_times, playback_rate=self.playback_rate[env_ids]
+        )
         root_pos[:, 2] += self.cfg.motion.height_offset
         
         
@@ -172,24 +247,23 @@ class HumanoidMimic(HumanoidChar):
         self._ref_root_ang_vel[env_ids] = root_ang_vel
         self._ref_dof_pos[env_ids] = dof_pos
         self._ref_dof_vel[env_ids] = dof_vel
-        self._ref_body_pos[env_ids] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(env_ids, global_body_pos)
         
     
     def _get_motion_times(self, env_ids=None):
         if env_ids is None:
-            motion_times = self.episode_length_buf * self.dt * self._get_playback_rate() + self._motion_time_offsets
+            motion_times = self.episode_length_buf * self._get_playback_dt() + self._motion_time_offsets
         else:
-            motion_times = self.episode_length_buf[env_ids] * self.dt * self._get_playback_rate(env_ids) + self._motion_time_offsets[env_ids]
+            motion_times = self.episode_length_buf[env_ids] * self._get_playback_dt(env_ids) + self._motion_time_offsets[env_ids]
         return motion_times
     
     def _update_ref_motion(self):
         motion_ids = self._motion_ids
         motion_times = self._get_motion_times()
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(motion_ids, motion_times)
-        playback_rate = self._get_playback_rate().unsqueeze(-1)
-        root_vel *= playback_rate
-        root_ang_vel *= playback_rate
-        dof_vel *= playback_rate
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos, root_pos_delta_local, root_rot_delta_local = self._motion_lib.calc_motion_frame(
+            motion_ids, motion_times, playback_rate=self.playback_rate
+        )
         root_pos[:, 2] += self.cfg.motion.height_offset
         root_pos[:, :2] += self.episode_init_origin[:, :2]
         
@@ -199,7 +273,8 @@ class HumanoidMimic(HumanoidChar):
         self._ref_root_ang_vel[:] = root_ang_vel
         self._ref_dof_pos[:] = dof_pos
         self._ref_dof_vel[:] = dof_vel
-        self._ref_body_pos[:] = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        global_body_pos = convert_to_global_root_body_pos(root_pos=root_pos, root_rot=root_rot, body_pos=body_pos)
+        self._scatter_ref_body_pos(torch.arange(self.num_envs, device=self.device), global_body_pos)
             
     def _reset_root_states(self, env_ids, root_vel=None, root_quat=None, root_pos=None, root_ang_vel=None):
         """ Resets ROOT states position and velocities of selected environmments
@@ -303,15 +378,13 @@ class HumanoidMimic(HumanoidChar):
     def _hard_sync_motion_loop(self):
         motion_times = self._get_motion_times()
         motion_lengths = self._motion_lib.get_motion_length(self._motion_ids)
-        hard_sync_envs = (motion_times >= motion_lengths) & (torch.abs(motion_times - motion_lengths) < self.dt)
+        hard_sync_envs = (motion_times >= motion_lengths) & (torch.abs(motion_times - motion_lengths) < self._get_playback_dt())
         hard_sync_env_ids = hard_sync_envs.nonzero(as_tuple=False).flatten()
         if len(hard_sync_env_ids) == 0:
             return
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(self._motion_ids, motion_times*0)
-        playback_rate = self._get_playback_rate(hard_sync_env_ids).unsqueeze(-1)
-        root_vel *= playback_rate
-        root_ang_vel *= playback_rate
-        dof_vel *= playback_rate
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(
+            self._motion_ids, motion_times * 0, playback_rate=self.playback_rate
+        )
         self._reset_dofs(hard_sync_env_ids, dof_pos, dof_vel*0.8)
         self._reset_root_states(env_ids=hard_sync_env_ids, root_vel=root_vel*0.8, root_quat=root_rot, root_pos=root_pos, root_ang_vel=root_ang_vel*0.8)
         self.gym.simulate(self.sim)
@@ -333,7 +406,7 @@ class HumanoidMimic(HumanoidChar):
         reset_motion_ids = self._motion_ids[env_ids]
         
         # Calculate completion rate for each environment (how far the robot got through the motion)
-        completion_rate = self.episode_length_buf[env_ids] * self.dt / self._motion_lib.get_motion_length(reset_motion_ids)
+        completion_rate = self.episode_length_buf[env_ids] * self._get_playback_dt(env_ids) / self._motion_lib.get_motion_length(reset_motion_ids)
         
         # Aggregate completion rates for each unique motion
         motion_completion_rate_sum = torch.zeros(self._motion_lib.num_motions(), device=self.device, dtype=torch.float).scatter_add(0, reset_motion_ids, completion_rate)
@@ -440,13 +513,14 @@ class HumanoidMimic(HumanoidChar):
         pitch_cut = torch.abs(self.pitch) > self.cfg.rewards.termination_pitch
         self.reset_buf |= roll_cut
         self.reset_buf |= pitch_cut
-        motion_end = self.episode_length_buf * self.dt >= self._motion_lib.get_motion_length(self._motion_ids)
+        motion_progress = self.episode_length_buf * self._get_playback_dt()
+        motion_end = motion_progress >= self._motion_lib.get_motion_length(self._motion_ids)
         self.reset_buf |= height_cutoff
         
         if self.viewer is None:
             self.reset_buf |= motion_end
         
-        self.time_out_buf = self.episode_length_buf > self.max_episode_length
+        self.time_out_buf = motion_progress > self.max_episode_length_s
         if self.viewer is None:
             self.time_out_buf |= motion_end
         
@@ -532,15 +606,15 @@ class HumanoidMimic(HumanoidChar):
         num_steps = self._tar_motion_steps_priv.shape[0]
         assert num_steps > 0, "Invalid number of target observation steps"
         motion_times = self._get_motion_times().unsqueeze(-1)
-        obs_motion_times = self._tar_motion_steps_priv * self.dt + motion_times
+        playback_dt = self._get_playback_dt().unsqueeze(-1)
+        obs_motion_times = self._tar_motion_steps_priv * playback_dt + motion_times
         motion_ids_tiled = torch.broadcast_to(self._motion_ids.unsqueeze(-1), obs_motion_times.shape)
         motion_ids_tiled = motion_ids_tiled.flatten()
         obs_motion_times = obs_motion_times.flatten()
-        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(motion_ids_tiled, obs_motion_times)
-        playback_rate = self._get_playback_rate().unsqueeze(-1)
-        root_vel *= playback_rate
-        root_ang_vel *= playback_rate
-        dof_vel *= playback_rate
+        playback_rate_tiled = self._tile_playback_rate(env_ids=None, repeat_steps=num_steps)
+        root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel, body_pos = self._motion_lib.calc_motion_frame(
+            motion_ids_tiled, obs_motion_times, playback_rate=playback_rate_tiled
+        )
         
         # Apply motion domain randomization noise
         root_pos, root_rot, root_vel, root_ang_vel, dof_pos, dof_vel = self._apply_motion_domain_randomization(

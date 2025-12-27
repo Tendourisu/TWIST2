@@ -146,7 +146,8 @@ class G1MimicPrivCfg(HumanoidMimicCfg):
     class asset(HumanoidMimicCfg.asset):
         # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision.urdf'
         # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_with_fixed_hand.urdf'
-        file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_29dof.urdf'
+        #file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_rev_1_0_mode5.urdf'
+        file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_plus_grippers.urdf'
         
         # for both joint and link name
         torso_name: str = 'pelvis'  # humanoid pelvis part
@@ -159,7 +160,7 @@ class G1MimicPrivCfg(HumanoidMimicCfg):
         waist_name: list = ['torso_link', 'waist_roll_link', 'waist_yaw_link']
         upper_arm_name: str = 'shoulder_roll_link'
         lower_arm_name: str = 'elbow_link'
-        hand_name: list = ['right_rubber_hand', 'left_rubber_hand']
+        hand_name: list = ['right_ctag_base_link', 'left_ctag_base_link']
 
         feet_bodies = ['left_ankle_roll_link', 'right_ankle_roll_link']
         n_lower_body_dofs: int = 12
@@ -328,8 +329,10 @@ class G1MimicPrivCfg(HumanoidMimicCfg):
         motion_curriculum = True
         motion_curriculum_gamma = 0.01
         reset_consec_frames = 30
-        key_bodies = ["left_rubber_hand", "right_rubber_hand", "left_ankle_roll_link", "right_ankle_roll_link", "left_knee_link", "right_knee_link", "left_elbow_link", "right_elbow_link", "head_mocap"] # 9 key bodies
-        upper_key_bodies = ["left_rubber_hand", "right_rubber_hand", "left_elbow_link", "right_elbow_link", "head_mocap"]
+        #key_bodies = ["left_rubber_hand", "right_rubber_hand", "left_ankle_roll_link", "right_ankle_roll_link", "left_knee_link", "right_knee_link", "left_elbow_link", "right_elbow_link", "head_mocap"] # 9 key bodies
+        #upper_key_bodies = ["left_rubber_hand", "right_rubber_hand", "left_elbow_link", "right_elbow_link", "head_mocap"]
+        key_bodies = ["left_ctag_base_link", "right_ctag_base_link", "left_ankle_roll_link", "right_ankle_roll_link", "left_knee_link", "right_knee_link", "left_elbow_link", "right_elbow_link", "head_mocap"] # 9 key bodies
+        upper_key_bodies = ["left_ctag_base_link", "right_ctag_base_link", "left_elbow_link", "right_elbow_link", "head_mocap"]
         sample_ratio = 1.0
         motion_smooth = True
         motion_decompose = False
