@@ -1046,6 +1046,19 @@ class HumanoidMimic(HumanoidChar):
         rew_airtime *= torch.norm(self._ref_root_vel[:, :2], dim=1) > 0.05
         return rew_airtime
 
+    def _reward_feet_ori(self):
+        rigid_body_pos = self.rigid_body_states[:, :, 0:3].clone()
+        rigid_body_rot = self.rigid_body_states[:, :, 3:7].clone()
+        left_quat = rigid_body_rot[:, self.feet_indices[0]]
+        left_gravity = quat_rotate_inverse(left_quat, self.gravity_vec)
+        right_quat = rigid_body_rot[:, self.feet_indices[1]]
+        right_gravity = quat_rotate_inverse(right_quat, self.gravity_vec)
+
+        feet_height_filt = rigid_body_pos[:,self.feet_indices, 2] < 0.25
+
+        return feet_height_filt[:,0] * torch.sum(torch.square(left_gravity[:, :2]), dim=1)**0.5 + feet_height_filt[:,1] * torch.sum(torch.square(right_gravity[:, :2]), dim=1)**0.5 
+
+
     def _reward_tracking_lin_vel(self):
         lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
         return torch.exp(-lin_vel_error/self.cfg.rewards.tracking_sigma)
