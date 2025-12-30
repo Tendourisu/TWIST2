@@ -41,6 +41,7 @@ class G1MimicStuFutureCfg(G1MimicPrivCfg):
         
         class force_curriculum:
             # Force application settings
+            # force_apply_links = ['left_rubber_hand', 'right_rubber_hand']  # Links to apply forces to
             force_apply_links = ['left_ctag_base_link', 'right_ctag_base_link']  # Links to apply forces to
             
             # Force curriculum learning
@@ -73,6 +74,7 @@ class G1MimicStuFutureCfg(G1MimicPrivCfg):
     
     class motion(G1MimicPrivCfg.motion):
         motion_file = f"{LEGGED_GYM_ROOT_DIR}/motion_data_configs/twist2_dataset.yaml"
+        # motion_file = f"{LEGGED_GYM_ROOT_DIR}/motion_data_configs/test.yaml"
         
         # Ensure motion curriculum is enabled for difficulty adaptation
         motion_curriculum = True

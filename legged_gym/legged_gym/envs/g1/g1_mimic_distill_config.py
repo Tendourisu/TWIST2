@@ -146,8 +146,13 @@ class G1MimicPrivCfg(HumanoidMimicCfg):
     class asset(HumanoidMimicCfg.asset):
         # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision.urdf'
         # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_with_fixed_hand.urdf'
-        #file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_rev_1_0_mode5.urdf'
-        file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_plus_grippers.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_29dof.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_rev_1_0_mode5.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_plus_grippers.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_29dof_plus_unified_grippers.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_mode5_29dof.urdf'
+        file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_mode5_29dof_plus_grippers.urdf'
+        # file = f'{LEGGED_GYM_ROOT_DIR}/../assets/g1/g1_custom_collision_mode5_29dof_plus_unified_grippers.urdf'
         
         # for both joint and link name
         torso_name: str = 'pelvis'  # humanoid pelvis part
@@ -160,6 +165,7 @@ class G1MimicPrivCfg(HumanoidMimicCfg):
         waist_name: list = ['torso_link', 'waist_roll_link', 'waist_yaw_link']
         upper_arm_name: str = 'shoulder_roll_link'
         lower_arm_name: str = 'elbow_link'
+        #hand_name: list = ['right_rubber_hand', 'left_rubber_hand']
         hand_name: list = ['right_ctag_base_link', 'left_ctag_base_link']
 
         feet_bodies = ['left_ankle_roll_link', 'right_ankle_roll_link']
